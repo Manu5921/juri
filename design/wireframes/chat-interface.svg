@@ -1,0 +1,64 @@
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" fill="#F8FAFC"/>
+
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="280" height="800" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="20" y="40" fill="#1E293B" font-size="18" font-weight="bold">Juri Assistant</text>
+
+  <!-- New Conversation Button -->
+  <rect x="20" y="70" width="240" height="40" fill="#6366F1" rx="6"/>
+  <text x="140" y="95" fill="#FFFFFF" font-size="14" text-anchor="middle" font-weight="600">+ Nouvelle Question</text>
+
+  <!-- Conversation History -->
+  <text x="20" y="140" fill="#64748B" font-size="12" font-weight="600">HISTORIQUE</text>
+  <rect x="20" y="155" width="240" height="60" fill="#F1F5F9" rx="6"/>
+  <text x="30" y="175" fill="#1E293B" font-size="13">Différence IR/IS pour SAS?</text>
+  <text x="30" y="195" fill="#64748B" font-size="11">Hier, 14:30</text>
+
+  <rect x="20" y="225" width="240" height="60" fill="#FFFFFF" stroke="#E2E8F0" rx="6"/>
+  <text x="30" y="245" fill="#1E293B" font-size="13">Statuts SAS obligatoires?</text>
+  <text x="30" y="265" fill="#64748B" font-size="11">3 oct, 10:15</text>
+
+  <rect x="20" y="295" width="240" height="60" fill="#FFFFFF" stroke="#E2E8F0" rx="6"/>
+  <text x="30" y="315" fill="#1E293B" font-size="13">Déclarations Urssaf année 1</text>
+  <text x="30" y="335" fill="#64748B" font-size="11">1 oct, 16:45</text>
+
+  <!-- Main Chat Area -->
+  <rect x="280" y="0" width="920" height="64" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="310" y="40" fill="#1E293B" font-size="16" font-weight="600">Conversation en cours</text>
+
+  <!-- Disclaimer Banner -->
+  <rect x="280" y="64" width="920" height="48" fill="#FEF2F2" stroke="#FCA5A5"/>
+  <text x="310" y="92" fill="#7F1D1D" font-size="13" font-weight="500">⚠ Pas de conseil juridique - valider avec expert pour statuts/déclarations/décisions >5K€</text>
+
+  <!-- Chat Messages -->
+  <!-- User Message -->
+  <rect x="700" y="140" width="460" height="80" fill="#6366F1" rx="8"/>
+  <text x="720" y="165" fill="#FFFFFF" font-size="14">Quelle est la différence entre IR et IS</text>
+  <text x="720" y="185" fill="#FFFFFF" font-size="14">pour une SAS?</text>
+  <text x="1140" y="210" fill="#E0E7FF" font-size="11" text-anchor="end">10:23</text>
+
+  <!-- Assistant Message with Citations -->
+  <rect x="310" y="240" width="600" height="200" fill="#FFFFFF" stroke="#E2E8F0" rx="8"/>
+  <text x="330" y="270" fill="#1E293B" font-size="14">Selon le Code Général des Impôts (articles 206-209),</text>
+  <text x="330" y="290" fill="#1E293B" font-size="14">la différence principale concerne le régime fiscal:</text>
+  <text x="330" y="320" fill="#1E293B" font-size="14">• IR (Impôt sur le Revenu): Bénéfices imposés au nom</text>
+  <text x="330" y="340" fill="#1E293B" font-size="14">  des associés selon leur quote-part</text>
+  <text x="330" y="360" fill="#1E293B" font-size="14">• IS (Impôt sur les Sociétés): Société imposée directement</text>
+
+  <!-- Citation Links -->
+  <rect x="330" y="380" width="180" height="28" fill="#EEF2FF" stroke="#C7D2FE" rx="4"/>
+  <text x="340" y="398" fill="#4338CA" font-size="12">📄 CGI Art. 206-209</text>
+
+  <rect x="520" y="380" width="150" height="28" fill="#EEF2FF" stroke="#C7D2FE" rx="4"/>
+  <text x="530" y="398" fill="#4338CA" font-size="12">📄 BOFiP §120</text>
+
+  <text x="880" y="428" fill="#64748B" font-size="11" text-anchor="end">10:23</text>
+
+  <!-- Input Area -->
+  <rect x="310" y="720" width="810" height="60" fill="#FFFFFF" stroke="#E2E8F0" rx="8"/>
+  <text x="330" y="755" fill="#94A3B8" font-size="14">Posez votre question juridique ou fiscale...</text>
+
+  <rect x="1090" y="735" width="60" height="30" fill="#6366F1" rx="6"/>
+  <text x="1120" y="755" fill="#FFFFFF" font-size="14" text-anchor="middle">↑</text>
+</svg>
