@@ -34,72 +34,129 @@ Display:
 
 ### Step 2: Verify Prerequisites
 
-Check 8 required files exist:
+**IMPORTANT:** Use Bash tool to create and execute a temporary verification script. This ensures all bash logic runs atomically (prevents variable scope issues with agents that execute line-by-line).
+
+Create verification script and execute it:
 
 ```bash
-# Run verification
-cd $PROJECT_PATH
+cd $PROJECT_PATH && cat > /tmp/speckit-final-verify-$$.sh << 'VERIFY_SCRIPT'
+#!/bin/bash
+set -e
 
-# Check each file
-if [ ! -f "ORCHESTRATION.md" ]; then echo "❌ ORCHESTRATION.md missing (run /speckit.agents)"; exit 1; fi
-if [ ! -f ".specify/memory/constitution.md" ]; then echo "❌ constitution.md missing (run /speckit.constitution)"; exit 1; fi
+MISSING_FILES=()
+
+# Check ORCHESTRATION.md (project root)
+if [ ! -f "ORCHESTRATION.md" ]; then
+  MISSING_FILES+=("ORCHESTRATION.md (run /speckit.agents)")
+fi
+
+# Check constitution.md
+if [ ! -f ".specify/memory/constitution.md" ]; then
+  MISSING_FILES+=("constitution.md (run /speckit.constitution)")
+fi
 
 # Detect Spec-Kit feature directory (usually specs/001-*)
 SPEC_DIR=$(find specs -type d -name "001-*" 2>/dev/null | head -1)
 
 # Check spec.md (3 possible locations)
+SPEC_PATH=""
 if [ -n "$SPEC_DIR" ] && [ -f "$SPEC_DIR/spec.md" ]; then
   SPEC_PATH="$SPEC_DIR/spec.md"
 elif [ -f ".specify/memory/spec.md" ]; then
   SPEC_PATH=".specify/memory/spec.md"
 else
-  echo "❌ spec.md missing (run /speckit.specify)"
-  exit 1
+  MISSING_FILES+=("spec.md (run /speckit.specify)")
 fi
 
 # Check tasks.md (3 possible locations)
+TASKS_PATH=""
 if [ -n "$SPEC_DIR" ] && [ -f "$SPEC_DIR/tasks.md" ]; then
   TASKS_PATH="$SPEC_DIR/tasks.md"
 elif [ -f ".specify/memory/tasks.md" ]; then
   TASKS_PATH=".specify/memory/tasks.md"
 else
-  echo "❌ tasks.md missing (run /speckit.tasks)"
-  exit 1
+  MISSING_FILES+=("tasks.md (run /speckit.tasks)")
 fi
 
 # Check plan.md (3 possible locations)
+PLAN_PATH=""
 if [ -n "$SPEC_DIR" ] && [ -f "$SPEC_DIR/plan.md" ]; then
   PLAN_PATH="$SPEC_DIR/plan.md"
 elif [ -f ".specify/memory/plan.md" ]; then
   PLAN_PATH=".specify/memory/plan.md"
 else
-  echo "❌ plan.md missing (run /speckit.plan)"
-  exit 1
+  MISSING_FILES+=("plan.md (run /speckit.plan)")
 fi
-if [ ! -f "design/design-tokens.json" ]; then echo "❌ design-tokens.json missing (run /speckit.design)"; exit 1; fi
+
+# Check design-tokens.json
+if [ ! -f "design/design-tokens.json" ]; then
+  MISSING_FILES+=("design-tokens.json (run /speckit.design)")
+fi
 
 # Check project-memory.md (2 possible locations)
+MEMORY_PATH=""
 if [ -f "project-memory.md" ]; then
   MEMORY_PATH="project-memory.md"
 elif [ -f ".specify/memory/project-memory.md" ]; then
   MEMORY_PATH=".specify/memory/project-memory.md"
 else
-  echo "❌ project-memory.md missing (run /speckit.init)"
-  exit 1
+  MISSING_FILES+=("project-memory.md (run /speckit.init)")
 fi
 
 # Create observability-pulse.jsonl if missing
 if [ ! -f "observability-pulse.jsonl" ]; then
-  echo "" > observability-pulse.jsonl
+  touch observability-pulse.jsonl
 fi
 
-echo "✅ Prerequisites verified (8 files)"
+# Report results
+if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+  echo "❌ PRÉREQUIS MANQUANTS"
+  echo ""
+  echo "  Fichiers manquants :"
+  for file in "${MISSING_FILES[@]}"; do
+    echo "  - $file"
+  done
+  echo ""
+  exit 1
+else
+  echo "✅ Prerequisites verified (8 files)"
+  echo ""
+  echo "Paths detected:"
+  echo "  - ORCHESTRATION.md: ✅"
+  echo "  - constitution.md: .specify/memory/ ✅"
+  echo "  - spec.md: ${SPEC_PATH} ✅"
+  echo "  - tasks.md: ${TASKS_PATH} ✅"
+  echo "  - plan.md: ${PLAN_PATH} ✅"
+  echo "  - design-tokens.json: design/ ✅"
+  echo "  - project-memory.md: ${MEMORY_PATH} ✅"
+  echo "  - observability-pulse.jsonl: (created if missing) ✅"
+  exit 0
+fi
+VERIFY_SCRIPT
+
+chmod +x /tmp/speckit-final-verify-$$.sh
+/tmp/speckit-final-verify-$$.sh
+VERIFY_EXIT_CODE=$?
+rm -f /tmp/speckit-final-verify-$$.sh
+
+if [ $VERIFY_EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "⏺ ❌ ARRÊT : Prérequis manquants"
+  exit 1
+fi
 ```
 
-If any prerequisite missing:
-- Display error message with missing files
-- STOP execution
-- Return error
+**Why this approach:**
+- ✅ **Atomic execution:** Entire bash script runs in one command (no variable scope issues)
+- ✅ **Agent-agnostic:** Works with Sonnet, Haiku, GLM, Codex (all execute bash differently)
+- ✅ **Clean error reporting:** Collects all missing files, displays once
+- ✅ **Self-cleaning:** Script deleted after execution
+- ✅ **Debuggable:** Script saved temporarily with PID ($$) for troubleshooting
+
+**If prerequisite check fails:**
+- Display error message with ALL missing files
+- STOP execution immediately
+- Return error code 1
 
 ---
 
