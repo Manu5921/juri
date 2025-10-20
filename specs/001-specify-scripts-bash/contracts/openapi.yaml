@@ -1,0 +1,893 @@
+openapi: 3.1.0
+info:
+  title: Juri MVP - RAG Legal Assistant API
+  description: |
+    Internal RAG-powered legal and financial assistant for PME founders.
+    Provides answers to French legal questions (SAS creation, IR/IS fiscality) with exact citations to official sources.
+
+    **Tech Stack**: Next.js 15 API Routes, Supabase PostgreSQL + pgvector, Claude 3.5 Sonnet API, OpenAI embeddings
+
+    **Authentication**: Session-based auth via Supabase Auth (cookie-based, RLS enforced)
+
+    **Rate Limiting**: 10 questions/hour per user (MVP constraint)
+  version: 1.0.0
+  contact:
+    name: Juri Support
+    email: support@juri-mvp.internal
+  license:
+    name: Internal Use Only
+    url: https://internal.company/license
+
+servers:
+  - url: https://juri-mvp.vercel.app/api
+    description: Production (Vercel Edge Network)
+  - url: http://localhost:3000/api
+    description: Local Development
+
+tags:
+  - name: Chat
+    description: RAG-powered Q&A endpoints (user questions + assistant answers)
+  - name: Documents
+    description: Source document management (admin upload, user list)
+  - name: Conversations
+    description: Conversation history management (list, archive, delete)
+  - name: Auth
+    description: User authentication (handled by Supabase Auth, included for completeness)
+
+paths:
+  # ===========================================================================
+  # Chat Endpoints
+  # ===========================================================================
+
+  /chat:
+    post:
+      summary: Submit legal question and receive RAG-powered answer
+      description: |
+        Submits a user question, triggers RAG pipeline (hybrid retrieval + Claude synthesis),
+        and returns assistant answer with citations to official French sources.
+
+        **RAG Pipeline**:
+        1. Embed user question (OpenAI text-embedding-3-small)
+        2. Hybrid retrieval: 70% vector similarity + 30% BM25 keyword search (top-5 chunks)
+        3. Claude synthesis with retrieved chunks only (zero-retention DPA)
+        4. Citation extraction and URL generation
+        5. Store message + citations in database
+
+        **Performance**: <30 seconds p95 (3s retrieval + 25s LLM synthesis)
+
+        **Rate Limit**: 10 questions/hour per user (429 Too Many Requests if exceeded)
+      operationId: submitQuestion
+      tags:
+        - Chat
+      security:
+        - supabaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversationId
+                - question
+              properties:
+                conversationId:
+                  type: string
+                  format: uuid
+                  description: Conversation UUID (create new conversation first if needed)
+                  example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+                question:
+                  type: string
+                  minLength: 10
+                  maxLength: 5000
+                  description: User question in French (10-5000 characters)
+                  example: "Quelle est la différence entre IR et IS pour une SAS?"
+      responses:
+        '200':
+          description: Assistant answer with citations
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - messageId
+                  - answer
+                  - citations
+                  - metadata
+                properties:
+                  messageId:
+                    type: string
+                    format: uuid
+                    description: UUID of created assistant message
+                    example: "b1ffcd88-8d1c-5fg9-cc7e-7cc0ce491b22"
+                  answer:
+                    type: string
+                    description: Assistant answer (Markdown format, with citations)
+                    example: |
+                      Selon le Code Général des Impôts (articles 206-209), la différence principale concerne le régime fiscal:
+
+                      • **IR (Impôt sur le Revenu)**: Les bénéfices de la SAS sont imposés au nom des associés selon leur quote-part. Chaque associé déclare sa part dans ses revenus personnels.
+
+                      • **IS (Impôt sur les Sociétés)**: La société est imposée directement sur ses bénéfices au taux de l'IS (actuellement 25% ou taux réduit 15% selon conditions).
+
+                      Le choix entre IR et IS dépend de votre situation fiscale personnelle et du niveau de bénéfices de la société. Pour les décisions fiscales >5K€, consultez un expert-comptable.
+                  citations:
+                    type: array
+                    description: List of official source citations
+                    items:
+                      type: object
+                      required:
+                        - citationId
+                        - articleRef
+                        - citationUrl
+                        - documentTitle
+                      properties:
+                        citationId:
+                          type: string
+                          format: uuid
+                          description: UUID of citation record
+                          example: "c2ggde99-9e2d-6hg0-dd8f-8dd1df602c33"
+                        articleRef:
+                          type: string
+                          description: Article reference (e.g., "CGI Art. 206-209")
+                          example: "CGI Art. 206-209"
+                        citationUrl:
+                          type: string
+                          format: uri
+                          description: Clickable URL to official source
+                          example: "https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000006162552/"
+                        documentTitle:
+                          type: string
+                          description: Source document title
+                          example: "Code Général des Impôts (Articles 206-209)"
+                        sourceType:
+                          type: string
+                          enum: [legifrance, bofip, inpi, urssaf]
+                          description: Official source type
+                          example: "legifrance"
+                  metadata:
+                    type: object
+                    description: Optional performance and debugging metadata
+                    properties:
+                      retrievalLatencyMs:
+                        type: integer
+                        description: Hybrid retrieval latency (vector + BM25)
+                        example: 42
+                      synthesisLatencyMs:
+                        type: integer
+                        description: Claude LLM synthesis latency
+                        example: 23456
+                      chunksRetrieved:
+                        type: integer
+                        description: Number of chunks retrieved (top-k)
+                        example: 5
+                      llmModel:
+                        type: string
+                        description: LLM model used for synthesis
+                        example: "claude-3-5-sonnet-20241022"
+                      tokenCount:
+                        type: object
+                        properties:
+                          input:
+                            type: integer
+                            description: Input tokens (context + question)
+                            example: 2134
+                          output:
+                            type: integer
+                            description: Output tokens (answer)
+                            example: 456
+        '400':
+          description: Bad request (invalid question format, missing conversation ID)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Bad Request"
+                message: "Question required (10-5000 characters)"
+                code: "INVALID_QUESTION_LENGTH"
+        '401':
+          description: Unauthorized (missing or invalid auth session)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Unauthorized"
+                message: "Authentication required"
+                code: "MISSING_AUTH_SESSION"
+        '429':
+          description: Too Many Requests (rate limit exceeded: 10 questions/hour)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Too Many Requests"
+                message: "Rate limit exceeded (10 questions/hour max)"
+                code: "RATE_LIMIT_EXCEEDED"
+                retryAfter: 3600
+        '500':
+          description: Internal Server Error (RAG pipeline failure, LLM API error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Internal Server Error"
+                message: "RAG pipeline failure: pgvector retrieval timeout"
+                code: "RAG_PIPELINE_ERROR"
+
+  # ===========================================================================
+  # Documents Endpoints
+  # ===========================================================================
+
+  /documents:
+    get:
+      summary: List all indexed legal source documents
+      description: |
+        Returns list of all official French legal documents indexed for RAG retrieval.
+        Includes metadata (title, source type, version, last updated date, status).
+
+        **Freshness Warnings**: Documents older than 90 days are flagged with warning.
+
+        **Use Case**: Sources page UI, admin document management
+      operationId: listDocuments
+      tags:
+        - Documents
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by document status (active or archived)
+          required: false
+          schema:
+            type: string
+            enum: [active, archived]
+            default: active
+        - name: sourceType
+          in: query
+          description: Filter by official source type
+          required: false
+          schema:
+            type: string
+            enum: [legifrance, bofip, inpi, urssaf]
+      responses:
+        '200':
+          description: List of indexed documents
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - documents
+                  - count
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  count:
+                    type: integer
+                    description: Total number of documents returned
+                    example: 5
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /documents/{documentId}:
+    get:
+      summary: Get document details by ID
+      description: |
+        Returns detailed metadata for a specific document, including:
+        - Title, source type, version, last updated date
+        - Number of indexed chunks (embeddings count)
+        - Citation frequency (how many times cited in conversations)
+        - Freshness status (up-to-date or outdated warning)
+      operationId: getDocument
+      tags:
+        - Documents
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          description: Document UUID
+          schema:
+            type: string
+            format: uuid
+            example: "d3hhfg11-0f3e-7ji1-ee9g-9ee2eg713d44"
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Not Found"
+                message: "Document not found"
+                code: "DOCUMENT_NOT_FOUND"
+
+  /ingest:
+    post:
+      summary: Upload and ingest new legal document (admin only)
+      description: |
+        Admin-only endpoint to upload and ingest new legal documents into RAG pipeline.
+
+        **Ingestion Pipeline**:
+        1. Validate file format (PDF or HTML, max 50MB, French language detection)
+        2. Upload to Supabase Storage
+        3. Extract text and chunk (500-1000 tokens, preserve article boundaries)
+        4. Generate embeddings (OpenAI text-embedding-3-small)
+        5. Store chunks + vectors in pgvector
+        6. Create document metadata record
+
+        **Performance**: <5 minutes for 50-page PDF
+
+        **Validation**:
+        - File format: PDF or HTML only
+        - File size: Max 50MB
+        - Language: French text detection (via langdetect or similar)
+        - Source URL: Must be HTTPS from official source
+      operationId: ingestDocument
+      tags:
+        - Documents
+      security:
+        - supabaseAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - title
+                - sourceType
+                - sourceUrl
+                - version
+                - lastUpdated
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF or HTML file (max 50MB)
+                title:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                  description: Document title
+                  example: "BOFiP - Guide Création SAS 2024"
+                sourceType:
+                  type: string
+                  enum: [legifrance, bofip, inpi, urssaf]
+                  description: Official source type
+                  example: "bofip"
+                sourceUrl:
+                  type: string
+                  format: uri
+                  description: Official source URL (HTTPS only)
+                  example: "https://bofip.impots.gouv.fr/bofip/12345-PGP.html"
+                version:
+                  type: string
+                  description: Version identifier (e.g., "2024-Q3", "2024-09-15")
+                  example: "2024-Q3"
+                lastUpdated:
+                  type: string
+                  format: date
+                  description: Date of last official update (YYYY-MM-DD)
+                  example: "2024-09-15"
+      responses:
+        '202':
+          description: Document ingestion started (async processing)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - documentId
+                  - status
+                  - estimatedCompletionMs
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                    description: Created document UUID
+                    example: "e4iigj22-1g4f-8kj2-ff0h-0ff3fh824e55"
+                  status:
+                    type: string
+                    enum: [processing]
+                    description: Ingestion status (processing = async job started)
+                    example: "processing"
+                  estimatedCompletionMs:
+                    type: integer
+                    description: Estimated completion time (milliseconds)
+                    example: 300000
+        '400':
+          description: Bad request (invalid file, missing metadata)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Bad Request"
+                message: "Invalid file format (PDF/HTML only, max 50MB, French text)"
+                code: "INVALID_FILE_FORMAT"
+        '403':
+          description: Forbidden (user is not admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden"
+                message: "Admin role required for document ingestion"
+                code: "INSUFFICIENT_PERMISSIONS"
+
+  # ===========================================================================
+  # Conversations Endpoints
+  # ===========================================================================
+
+  /conversations:
+    get:
+      summary: List user's conversation history
+      description: |
+        Returns list of user's conversations, ordered by most recent first.
+        Includes auto-generated title (from first user question), last updated timestamp, message count.
+
+        **Use Case**: Conversation history sidebar in chat UI
+      operationId: listConversations
+      tags:
+        - Conversations
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by conversation status (active or archived)
+          required: false
+          schema:
+            type: string
+            enum: [active, archived]
+            default: active
+        - name: limit
+          in: query
+          description: Max number of conversations to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Pagination offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - conversations
+                  - count
+                  - total
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+                  count:
+                    type: integer
+                    description: Number of conversations returned (capped by limit)
+                    example: 20
+                  total:
+                    type: integer
+                    description: Total number of user's conversations (all statuses)
+                    example: 47
+
+    post:
+      summary: Create new conversation
+      description: |
+        Creates a new conversation for the authenticated user.
+        Title is auto-generated from first user message (set to null initially).
+
+        **Use Case**: "New Question" button in chat UI
+      operationId: createConversation
+      tags:
+        - Conversations
+      security:
+        - supabaseAuth: []
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - conversationId
+                  - createdAt
+                properties:
+                  conversationId:
+                    type: string
+                    format: uuid
+                    description: Created conversation UUID
+                    example: "f5jjhk33-2h5g-9lk3-gg1i-1gg4gi935f66"
+                  createdAt:
+                    type: string
+                    format: date-time
+                    description: Conversation creation timestamp
+                    example: "2025-10-18T10:23:45Z"
+
+  /conversations/{conversationId}:
+    get:
+      summary: Get conversation details (messages + citations)
+      description: |
+        Returns full conversation history including:
+        - All messages (user questions + assistant answers + system notices)
+        - Citations for each assistant message
+        - Metadata (created, updated timestamps, status)
+
+        **Use Case**: Load conversation in chat UI, display citation links
+      operationId: getConversation
+      tags:
+        - Conversations
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation UUID
+          schema:
+            type: string
+            format: uuid
+            example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+      responses:
+        '200':
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      summary: Update conversation (archive/restore)
+      description: |
+        Updates conversation status (archive or restore).
+
+        **Use Case**: Archive old conversations, restore archived conversation
+      operationId: updateConversation
+      tags:
+        - Conversations
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [active, archived]
+                  description: New conversation status
+                  example: "archived"
+      responses:
+        '200':
+          description: Conversation updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - conversationId
+                  - status
+                properties:
+                  conversationId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [active, archived]
+
+    delete:
+      summary: Delete conversation (soft delete)
+      description: |
+        Deletes conversation and all associated messages/citations.
+
+        **Implementation**: Cascade delete via foreign key constraints (messages → citations).
+
+        **Use Case**: User wants to permanently remove conversation
+      operationId: deleteConversation
+      tags:
+        - Conversations
+      security:
+        - supabaseAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Conversation deleted
+        '404':
+          description: Conversation not found
+
+# =============================================================================
+# Components (Reusable Schemas)
+# =============================================================================
+
+components:
+  securitySchemes:
+    supabaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth session token (obtained via Supabase client login)
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+        - message
+        - code
+      properties:
+        error:
+          type: string
+          description: HTTP error name
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error description
+          example: "Question required (10-5000 characters)"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "INVALID_QUESTION_LENGTH"
+        retryAfter:
+          type: integer
+          description: Optional retry-after duration (seconds) for rate limiting
+          example: 3600
+
+    Document:
+      type: object
+      required:
+        - id
+        - title
+        - sourceType
+        - sourceUrl
+        - version
+        - lastUpdated
+        - uploadDate
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Document UUID
+          example: "d3hhfg11-0f3e-7ji1-ee9g-9ee2eg713d44"
+        title:
+          type: string
+          description: Document title
+          example: "BOFiP - Guide de Création SAS 2024"
+        sourceType:
+          type: string
+          enum: [legifrance, bofip, inpi, urssaf]
+          description: Official source type
+          example: "bofip"
+        sourceUrl:
+          type: string
+          format: uri
+          description: Official source URL
+          example: "https://bofip.impots.gouv.fr/bofip/12345-PGP.html"
+        version:
+          type: string
+          description: Version identifier
+          example: "2024-Q3"
+        lastUpdated:
+          type: string
+          format: date
+          description: Date of last official update
+          example: "2024-09-15"
+        uploadDate:
+          type: string
+          format: date-time
+          description: Date document was ingested into system
+          example: "2024-10-01T08:30:00Z"
+        status:
+          type: string
+          enum: [active, archived]
+          description: Document status
+          example: "active"
+        freshnessWarning:
+          type: boolean
+          description: True if document is older than 90 days
+          example: false
+
+    DocumentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Document'
+        - type: object
+          properties:
+            chunksCount:
+              type: integer
+              description: Number of indexed chunks (embeddings)
+              example: 127
+            citationCount:
+              type: integer
+              description: Number of times cited in conversations
+              example: 23
+            metadata:
+              type: object
+              description: Additional metadata (page count, author, article range)
+              properties:
+                pageCount:
+                  type: integer
+                  example: 45
+                articleRange:
+                  type: string
+                  example: "Art. 206-209"
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - userId
+        - title
+        - createdAt
+        - updatedAt
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Conversation UUID
+          example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        userId:
+          type: string
+          format: uuid
+          description: Owner user UUID
+          example: "u1aabcd0-0d1a-5ef9-bb7d-7bb0bd491a22"
+        title:
+          type: string
+          nullable: true
+          description: Auto-generated title (first user question, truncated to 60 chars)
+          example: "Quelle est la différence entre IR et IS pour une SAS?"
+        createdAt:
+          type: string
+          format: date-time
+          description: Conversation creation timestamp
+          example: "2025-10-18T10:23:45Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last message timestamp
+          example: "2025-10-18T10:25:12Z"
+        status:
+          type: string
+          enum: [active, archived]
+          description: Conversation status
+          example: "active"
+        messageCount:
+          type: integer
+          description: Total number of messages in conversation
+          example: 6
+
+    ConversationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+        - type: object
+          properties:
+            messages:
+              type: array
+              description: List of messages in chronological order
+              items:
+                $ref: '#/components/schemas/Message'
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Message UUID
+          example: "m2bbcde1-1e2b-6fg0-cc8e-8cc1ce502b33"
+        conversationId:
+          type: string
+          format: uuid
+          description: Parent conversation UUID
+          example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        role:
+          type: string
+          enum: [user, assistant, system]
+          description: Message sender
+          example: "assistant"
+        content:
+          type: string
+          description: Message text (Markdown format)
+          example: "Selon le Code Général des Impôts (articles 206-209)..."
+        createdAt:
+          type: string
+          format: date-time
+          description: Message timestamp
+          example: "2025-10-18T10:23:56Z"
+        citations:
+          type: array
+          description: Citations for assistant messages (empty for user/system messages)
+          items:
+            type: object
+            required:
+              - citationId
+              - articleRef
+              - citationUrl
+              - documentTitle
+            properties:
+              citationId:
+                type: string
+                format: uuid
+                example: "c2ggde99-9e2d-6hg0-dd8f-8dd1df602c33"
+              articleRef:
+                type: string
+                example: "CGI Art. 206-209"
+              citationUrl:
+                type: string
+                format: uri
+                example: "https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000006162552/"
+              documentTitle:
+                type: string
+                example: "Code Général des Impôts (Articles 206-209)"
+              sourceType:
+                type: string
+                enum: [legifrance, bofip, inpi, urssaf]
+                example: "legifrance"
+
+security:
+  - supabaseAuth: []

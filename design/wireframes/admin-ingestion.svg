@@ -1,0 +1,72 @@
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="800" fill="#F8FAFC"/>
+
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="280" height="800" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="20" y="40" fill="#1E293B" font-size="18" font-weight="bold">Juri Assistant</text>
+
+  <!-- Navigation -->
+  <rect x="20" y="100" width="240" height="40" fill="#FFFFFF" stroke="#E2E8F0" rx="6"/>
+  <text x="30" y="125" fill="#64748B" font-size="14">💬 Conversations</text>
+
+  <rect x="20" y="150" width="240" height="40" fill="#FFFFFF" stroke="#E2E8F0" rx="6"/>
+  <text x="30" y="175" fill="#64748B" font-size="14">📚 Sources</text>
+
+  <rect x="20" y="200" width="240" height="40" fill="#EEF2FF" stroke="#C7D2FE" rx="6"/>
+  <text x="30" y="225" fill="#4338CA" font-size="14" font-weight="600">⚙️ Admin</text>
+
+  <!-- Main Content -->
+  <rect x="280" y="0" width="920" height="64" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="310" y="40" fill="#1E293B" font-size="20" font-weight="700">Administration - Ingestion de Documents</text>
+
+  <!-- Upload Area -->
+  <text x="310" y="110" fill="#1E293B" font-size="16" font-weight="600">Ajouter une Nouvelle Source</text>
+
+  <rect x="310" y="130" width="760" height="200" fill="#FFFFFF" stroke="#CBD5E1" stroke-dasharray="8,4" rx="12"/>
+
+  <!-- Drag & Drop Icon -->
+  <rect x="580" y="170" width="80" height="80" fill="#EEF2FF" rx="8"/>
+  <text x="620" y="220" fill="#6366F1" font-size="40" text-anchor="middle">📁</text>
+
+  <text x="640" y="275" fill="#1E293B" font-size="15" font-weight="600" text-anchor="middle">Glissez-déposez un document PDF ou HTML</text>
+  <text x="640" y="295" fill="#64748B" font-size="13" text-anchor="middle">ou cliquez pour parcourir</text>
+  <text x="640" y="315" fill="#94A3B8" font-size="12" text-anchor="middle">Formats acceptés: PDF, HTML • Taille max: 50MB</text>
+
+  <!-- Document Metadata Form -->
+  <text x="310" y="370" fill="#1E293B" font-size="16" font-weight="600">Métadonnées du Document</text>
+
+  <rect x="310" y="390" width="760" height="330" fill="#FFFFFF" stroke="#E2E8F0" rx="8"/>
+
+  <!-- Title Field -->
+  <text x="330" y="420" fill="#1E293B" font-size="13" font-weight="500">Titre du document</text>
+  <rect x="330" y="430" width="720" height="40" fill="#F8FAFC" stroke="#CBD5E1" rx="6"/>
+  <text x="345" y="455" fill="#94A3B8" font-size="14">Ex: Guide BOFiP Création SAS 2024</text>
+
+  <!-- Source Type -->
+  <text x="330" y="495" fill="#1E293B" font-size="13" font-weight="500">Type de source</text>
+  <rect x="330" y="505" width="340" height="40" fill="#F8FAFC" stroke="#CBD5E1" rx="6"/>
+  <text x="345" y="530" fill="#1E293B" font-size="14">Légifrance ▼</text>
+  <text x="650" y="525" fill="#64748B" font-size="12">(Légifrance, BOFiP, INPI, Urssaf)</text>
+
+  <!-- URL Field -->
+  <text x="330" y="570" fill="#1E293B" font-size="13" font-weight="500">URL source officielle</text>
+  <rect x="330" y="580" width="720" height="40" fill="#F8FAFC" stroke="#CBD5E1" rx="6"/>
+  <text x="345" y="605" fill="#94A3B8" font-size="14">https://www.legifrance.gouv.fr/...</text>
+
+  <!-- Version Field -->
+  <text x="330" y="645" fill="#1E293B" font-size="13" font-weight="500">Version / Date de publication</text>
+  <rect x="330" y="655" width="340" height="40" fill="#F8FAFC" stroke="#CBD5E1" rx="6"/>
+  <text x="345" y="680" fill="#94A3B8" font-size="14">2024-10-15</text>
+
+  <!-- Action Buttons -->
+  <rect x="770" y="655" width="140" height="40" fill="#F1F5F9" stroke="#CBD5E1" rx="6"/>
+  <text x="840" y="680" fill="#64748B" font-size="14" text-anchor="middle">Annuler</text>
+
+  <rect x="920" y="655" width="140" height="40" fill="#6366F1" rx="6"/>
+  <text x="990" y="680" fill="#FFFFFF" font-size="14" text-anchor="middle" font-weight="600">Ingérer Document</text>
+
+  <!-- Processing Status (hidden initially) -->
+  <text x="310" y="750" fill="#1E293B" font-size="16" font-weight="600">État de l'Ingestion</text>
+  <rect x="310" y="760" width="760" height="30" fill="#F0FDFA" stroke="#14B8A6" rx="6"/>
+  <text x="330" y="782" fill="#0D9488" font-size="13">✓ Document validé • Chunking en cours (2/5 min estimées)...</text>
+</svg>
