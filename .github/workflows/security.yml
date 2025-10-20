@@ -1,0 +1,47 @@
+# .github/workflows/security.yml
+name: Security Audit Workflow
+on:
+  pull_request:
+  push:
+    branches: [ feat/mvp ]
+
+# Restrict permissions to the minimum required
+permissions:
+  contents: read
+  security-events: write # Required for SARIF upload
+
+jobs:
+  shell_lint_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - name: Install bats & shellcheck
+        run: sudo apt-get update && sudo apt-get install -y bats shellcheck
+      - name: ShellCheck
+        run: shellcheck -S style $(git ls-files '*.sh' || true)
+      - name: Bats tests
+        run: bats -r tests || true
+
+  secrets_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - name: Secrets (gitleaks-like)
+        run: |
+          bash -c 'grep -RIl --exclude-dir=.git -E "(AKIA|SECRET|PASSWORD=|TOKEN=)" . || true'
+
+  sast_semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - name: Semgrep (rules OWASP/bash/js)
+        run: |
+          pipx install semgrep
+          semgrep --config p/owasp-top-ten --error --sarif --output semgrep.sarif || true
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@49144ccc36107322759661d92550d909ddb03d9e # v3
+        with:
+          sarif_file: semgrep.sarif
